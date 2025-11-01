@@ -162,7 +162,19 @@ with col6:
     ejection_fraction = st.number_input("Ejection Fraction (%)", min_value=0.0, max_value=100.0, value=60.0, step=0.1)
     
 with col7:
-    lifestyle_score = st.number_input("Lifestyle Score", min_value=0, max_value=10, value=5, step=1)
+    # Calculate Lifestyle Score automatically based on lifestyle factors
+    # Lifestyle Score = sum of risk factors (smoking, alcohol, inactivity)
+    lifestyle_score = 0
+    if smoke == 1:
+        lifestyle_score += 1  # Smoking adds to lifestyle risk
+    if alco == 1:
+        lifestyle_score += 1  # Alcohol adds to lifestyle risk
+    if active == 0:
+        lifestyle_score += 1  # Inactivity adds to lifestyle risk
+    
+    # Display calculated lifestyle score
+    st.metric("Lifestyle Score", lifestyle_score, 
+              help="Auto-calculated: +1 for smoking, +1 for alcohol, +1 for inactivity (Range: 0-3)")
 
 # Calculate additional derived features
 obesity_flag = 1 if bmi >= 30 else 0
