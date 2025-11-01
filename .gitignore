@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Data files (keep models for deployment)
+*.csv
+*.pkl
+# Note: models/*.joblib and models/*.json are needed for deployment, so we commit them
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit (but keep config.toml)
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
