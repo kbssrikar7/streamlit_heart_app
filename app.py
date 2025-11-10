@@ -76,13 +76,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Load models and preprocessor
-# Note: Using cache_ttl to ensure weights file updates are picked up
-@st.cache_resource(ttl=3600)  # Cache for 1 hour, but can be cleared
+# Cache key includes weights file modification time to force refresh when weights change
+@st.cache_resource
 def load_models():
     """Load models and preprocessor (cached for performance)"""
     models_dir = Path("models")
     
     try:
+        # Get weights file modification time for cache invalidation
+        weights_file = models_dir / "ensemble_weights.json"
+        weights_mtime = weights_file.stat().st_mtime if weights_file.exists() else 0
+        
         preprocessor = joblib.load(models_dir / "preprocessor.joblib")
         xgb_model = joblib.load(models_dir / "xgb_model.joblib")
         cat_model = joblib.load(models_dir / "cat_model.joblib")
@@ -90,8 +94,14 @@ def load_models():
         with open(models_dir / "feature_info.json", 'r') as f:
             feature_info = json.load(f)
         
-        with open(models_dir / "ensemble_weights.json", 'r') as f:
+        with open(weights_file, 'r') as f:
             ensemble_weights = json.load(f)
+        
+        # Verify weights are loaded correctly
+        if ensemble_weights.get('w_xgb', 0.5) != 0.5 or ensemble_weights.get('w_cat', 0.5) != 0.5:
+            # Log warning but don't fail
+            import sys
+            print(f"WARNING: Ensemble weights are {ensemble_weights.get('w_xgb', 0.5)}/{ensemble_weights.get('w_cat', 0.5)}. Expected 0.5/0.5.", file=sys.stderr)
         
         return preprocessor, xgb_model, cat_model, feature_info, ensemble_weights
     except Exception as e:
