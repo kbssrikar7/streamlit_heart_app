@@ -50,12 +50,18 @@ num_cols = [c for c in X.columns if c not in cat_cols]
 print(f"Numeric columns: {len(num_cols)}")
 print(f"Categorical columns: {len(cat_cols)}")
 
-# Train-test split
+# Train-test split (80-20)
 X_train_raw, X_test_raw, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
 )
 
-print(f"Train: {X_train_raw.shape}, Test: {X_test_raw.shape}")
+# Further split test set into validation (for weight optimization) and final test
+# Paper: "optimized the weights on a validation set"
+X_val_raw, X_test_final_raw, y_val, y_test_final = train_test_split(
+    X_test_raw, y_test, test_size=0.5, random_state=RANDOM_STATE, stratify=y_test
+)
+
+print(f"Train: {X_train_raw.shape}, Validation: {X_val_raw.shape}, Test: {X_test_final_raw.shape}")
 
 # Create preprocessing pipeline
 numeric_transformer = Pipeline(steps=[
@@ -76,7 +82,8 @@ preprocessor = ColumnTransformer([
 # Fit and transform
 print("Preprocessing data...")
 X_train = preprocessor.fit_transform(X_train_raw)
-X_test = preprocessor.transform(X_test_raw)
+X_val = preprocessor.transform(X_val_raw)
+X_test = preprocessor.transform(X_test_final_raw)
 
 # Get feature names after preprocessing
 ohe_names = []
@@ -103,30 +110,37 @@ cb_clf = CatBoostClassifier(
 cb_clf.fit(X_train, y_train)
 
 # Evaluate models
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
 
+# Get predictions on validation set for weight optimization
+xgb_probs_val = xgb_clf.predict_proba(X_val)[:, 1]
+cb_probs_val = cb_clf.predict_proba(X_val)[:, 1]
+
+# Get predictions on test set for final evaluation
 xgb_preds = xgb_clf.predict(X_test)
 xgb_probs = xgb_clf.predict_proba(X_test)[:, 1]
 cb_preds = cb_clf.predict(X_test)
 cb_probs = cb_clf.predict_proba(X_test)[:, 1]
 
 xgb_metrics = {
-    'accuracy': accuracy_score(y_test, xgb_preds),
-    'precision': precision_score(y_test, xgb_preds),
-    'recall': recall_score(y_test, xgb_preds),
-    'f1': f1_score(y_test, xgb_preds),
-    'roc_auc': roc_auc_score(y_test, xgb_probs)
+    'accuracy': accuracy_score(y_test_final, xgb_preds),
+    'precision': precision_score(y_test_final, xgb_preds),
+    'recall': recall_score(y_test_final, xgb_preds),
+    'f1': f1_score(y_test_final, xgb_preds),
+    'roc_auc': roc_auc_score(y_test_final, xgb_probs),
+    'pr_auc': average_precision_score(y_test_final, xgb_probs)
 }
 
 cb_metrics = {
-    'accuracy': accuracy_score(y_test, cb_preds),
-    'precision': precision_score(y_test, cb_preds),
-    'recall': recall_score(y_test, cb_preds),
-    'f1': f1_score(y_test, cb_preds),
-    'roc_auc': roc_auc_score(y_test, cb_probs)
+    'accuracy': accuracy_score(y_test_final, cb_preds),
+    'precision': precision_score(y_test_final, cb_preds),
+    'recall': recall_score(y_test_final, cb_preds),
+    'f1': f1_score(y_test_final, cb_preds),
+    'roc_auc': roc_auc_score(y_test_final, cb_probs),
+    'pr_auc': average_precision_score(y_test_final, cb_probs)
 }
 
-print("\n=== Model Performance ===")
+print("\n=== Model Performance (Test Set) ===")
 print("\nXGBoost Metrics:")
 for k, v in xgb_metrics.items():
     print(f"  {k}: {v:.4f}")
@@ -152,10 +166,81 @@ feature_info = {
 with open(os.path.join(RESULTS_DIR, "feature_info.json"), 'w') as f:
     json.dump(feature_info, f, indent=2)
 
-# Save ensemble weights (50-50 split)
-ensemble_weights = {'w_xgb': 0.5, 'w_cat': 0.5}
+# Ensemble Weight Optimization (Paper Section III.F)
+# "We optimized the weights on a validation set (grid search over 0.0–1.0 in steps of 0.05) 
+# by maximizing ROC-AUC and F1 on the hold-out fold"
+print("\n=== Optimizing Ensemble Weights ===")
+print("Grid search over weights (0.0 to 1.0, steps of 0.05)...")
+
+best_roc_auc = 0
+best_f1 = 0
+best_weights_roc = (0.5, 0.5)
+best_weights_f1 = (0.5, 0.5)
+weight_results = []
+
+# Grid search over weights
+weights = np.arange(0.0, 1.01, 0.05)
+for w_xgb in weights:
+    w_cat = 1.0 - w_xgb
+    # Ensemble probability on validation set
+    ensemble_probs_val = w_xgb * xgb_probs_val + w_cat * cb_probs_val
+    ensemble_preds_val = (ensemble_probs_val >= 0.5).astype(int)
+    
+    # Calculate metrics
+    roc_auc = roc_auc_score(y_val, ensemble_probs_val)
+    f1 = f1_score(y_val, ensemble_preds_val)
+    
+    weight_results.append({
+        'w_xgb': w_xgb,
+        'w_cat': w_cat,
+        'roc_auc': roc_auc,
+        'f1': f1
+    })
+    
+    # Track best weights for ROC-AUC
+    if roc_auc > best_roc_auc:
+        best_roc_auc = roc_auc
+        best_weights_roc = (w_xgb, w_cat)
+    
+    # Track best weights for F1
+    if f1 > best_f1:
+        best_f1 = f1
+        best_weights_f1 = (w_xgb, w_cat)
+
+# Paper says "maximizing ROC-AUC and F1" - use average or prioritize ROC-AUC
+# Using ROC-AUC as primary (as it's more common for ensemble optimization)
+best_weights = best_weights_roc
+print(f"\nBest weights (ROC-AUC): w_xgb={best_weights[0]:.2f}, w_cat={best_weights[1]:.2f}, ROC-AUC={best_roc_auc:.4f}")
+print(f"Best weights (F1): w_xgb={best_weights_f1[0]:.2f}, w_cat={best_weights_f1[1]:.2f}, F1={best_f1:.4f}")
+print(f"Selected weights: w_xgb={best_weights[0]:.2f}, w_cat={best_weights[1]:.2f}")
+
+# Save optimized weights
+ensemble_weights = {'w_xgb': float(best_weights[0]), 'w_cat': float(best_weights[1])}
 with open(os.path.join(RESULTS_DIR, "ensemble_weights.json"), 'w') as f:
-    json.dump(ensemble_weights, f)
+    json.dump(ensemble_weights, f, indent=2)
+
+# Save weight optimization results
+weight_df = pd.DataFrame(weight_results)
+weight_df.to_csv(os.path.join(RESULTS_DIR, "weight_optimization_results.csv"), index=False)
+print(f"Weight optimization results saved to {RESULTS_DIR}/weight_optimization_results.csv")
+
+# Calculate ensemble metrics on test set with optimized weights
+ensemble_probs = ensemble_weights['w_xgb'] * xgb_probs + ensemble_weights['w_cat'] * cb_probs
+ensemble_preds = (ensemble_probs >= 0.5).astype(int)
+
+ensemble_metrics = {
+    'accuracy': accuracy_score(y_test_final, ensemble_preds),
+    'precision': precision_score(y_test_final, ensemble_preds),
+    'recall': recall_score(y_test_final, ensemble_preds),
+    'f1': f1_score(y_test_final, ensemble_preds),
+    'roc_auc': roc_auc_score(y_test_final, ensemble_probs),
+    'pr_auc': average_precision_score(y_test_final, ensemble_probs)
+}
+
+print(f"\n=== Ensemble Performance (Test Set) ===")
+print(f"Using optimized weights: w_xgb={ensemble_weights['w_xgb']:.2f}, w_cat={ensemble_weights['w_cat']:.2f}")
+for k, v in ensemble_metrics.items():
+    print(f"  {k}: {v:.4f}")
 
 print(f"\nAll artifacts saved to {RESULTS_DIR}/")
 print("Models ready for Streamlit deployment!")

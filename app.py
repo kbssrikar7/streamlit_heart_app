@@ -10,6 +10,12 @@ import joblib
 import json
 import os
 from pathlib import Path
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    st.warning("SHAP library not available. Install with: pip install shap")
 
 # Page configuration
 st.set_page_config(
@@ -83,7 +89,7 @@ st.markdown("---")
 if preprocessor is None:
     st.stop()
 
-# Sidebar for model info
+# Sidebar for model info and settings
 with st.sidebar:
     st.header("📊 Model Information")
     st.markdown("""
@@ -98,6 +104,18 @@ with st.sidebar:
     **Note:** This is a prediction tool, not a medical diagnosis.
     Always consult healthcare professionals for medical advice.
     """)
+    
+    st.markdown("---")
+    st.header("⚙️ Risk Mapping Strategy")
+    mapping_strategy = st.radio(
+        "Select Risk Classification Strategy:",
+        options=["Standard", "Mapping A (High Recall)", "Mapping B (High Precision)"],
+        help="""
+        **Standard**: Moderate risk (30-70%) uses threshold 0.5
+        **Mapping A**: Moderate risk treated as 'At-Risk' (higher recall, better for screening)
+        **Mapping B**: Moderate risk treated as 'Safe' (higher precision, reduces false alarms)
+        """
+    )
 
 # Input form with all features
 st.header("📝 Patient Information")
@@ -192,19 +210,21 @@ with col6:
     ejection_fraction = st.number_input("Ejection Fraction (%)", min_value=0.0, max_value=100.0, value=60.0, step=0.1)
     
 with col7:
-    # Calculate Lifestyle Score automatically based on lifestyle factors
-    # Lifestyle Score = sum of risk factors (smoking, alcohol, inactivity)
-    lifestyle_score = 0
-    risk_factors = []
+    # Calculate Lifestyle Score based on paper formula: Lifestyle = active - (smoke + alco)
+    # Paper formula: active - (smoke + alco) 
+    # Range: -2 (worst: inactive + smoke + alcohol) to 1 (best: active, no smoke, no alcohol)
+    # For model compatibility, we normalize to 0-3 range (matching training data format)
+    lifestyle_score_raw = active - (smoke + alco)  # Paper formula: range -2 to 1
+    # Normalize to 0-3 for model compatibility (inverted: higher = worse)
+    # Maps: -2→3, -1→2, 0→1, 1→0 (worst to best lifestyle)
+    lifestyle_score = 3 - (lifestyle_score_raw + 2) if lifestyle_score_raw >= -2 else 3
     
+    risk_factors = []
     if smoke == 1:
-        lifestyle_score += 1  # Smoking adds to lifestyle risk
         risk_factors.append("Smoking")
     if alco == 1:
-        lifestyle_score += 1  # Alcohol adds to lifestyle risk
         risk_factors.append("Alcohol")
     if active == 0:
-        lifestyle_score += 1  # Inactivity adds to lifestyle risk
         risk_factors.append("Inactive")
     
     # Display calculated lifestyle score with risk indicator
@@ -224,7 +244,7 @@ with col7:
     st.metric(
         "Lifestyle Risk Score", 
         f"{lifestyle_score}/3 - {score_label}",
-        help=f"Auto-calculated from lifestyle factors. Risk factors: {', '.join(risk_factors) if risk_factors else 'None'}"
+        help=f"Formula: active - (smoke + alco), scaled for display. Risk factors: {', '.join(risk_factors) if risk_factors else 'None'}"
     )
     if risk_factors:
         st.caption(f"⚠️ Risk factors: {', '.join(risk_factors)}")
@@ -276,8 +296,8 @@ elif health_risk_score <= 4:
 else:
     risk_level = "High"
 
-# Risk Age (derived)
-risk_age = age_years + (health_risk_score * 5)
+# Risk Age (derived) - Paper formula: age_years + BMI/5 + 2*(cholesterol > 1) + (gluc > 1)
+risk_age = age_years + (bmi / 5) + (2 * (1 if cholesterol > 1 else 0)) + (1 if gluc > 1 else 0)
 
 # Create feature dictionary
 feature_dict = {
@@ -379,19 +399,71 @@ if predict_button:
         w_cat = ensemble_weights.get('w_cat', 0.5)
         ensemble_prob = w_xgb * xgb_prob + w_cat * cat_prob
         
-        # Binary prediction
-        prediction = 1 if ensemble_prob >= 0.5 else 0
         risk_percentage = ensemble_prob * 100
+        
+        # Hybrid Dual-Threshold Risk Mapping (Paper Section IV.E)
+        # Mapping A: Moderate (30-70%) → At-Risk (higher recall for screening)
+        # Mapping B: Moderate (30-70%) → Safe (higher precision, fewer false alarms)
+        # Standard: Uses 0.5 threshold
+        if mapping_strategy == "Mapping A (High Recall)":
+            # Moderate risk treated as at-risk (threshold at 30%)
+            prediction = 1 if risk_percentage >= 30 else 0
+            mapping_description = "Moderate risk (30-70%) classified as 'At-Risk' for early detection"
+        elif mapping_strategy == "Mapping B (High Precision)":
+            # Moderate risk treated as safe (threshold at 70%)
+            prediction = 1 if risk_percentage >= 70 else 0
+            mapping_description = "Moderate risk (30-70%) classified as 'Safe' to reduce false alarms"
+        else:
+            # Standard threshold at 50%
+            prediction = 1 if ensemble_prob >= 0.5 else 0
+            mapping_description = "Standard threshold (50%) for balanced precision and recall"
+        
+        # Generate Reason String for interpretability (Paper Section III.C)
+        reason_parts = []
+        if ap_hi >= 140 or ap_lo >= 90:
+            reason_parts.append("High BP")
+        if bmi >= 30:
+            reason_parts.append("Obese")
+        elif bmi >= 25:
+            reason_parts.append("Overweight")
+        if cholesterol >= 3:
+            reason_parts.append("High Cholesterol")
+        elif cholesterol >= 2:
+            reason_parts.append("Elevated Cholesterol")
+        if gluc >= 3:
+            reason_parts.append("High Glucose")
+        elif gluc >= 2:
+            reason_parts.append("Elevated Glucose")
+        if ejection_fraction < 50:
+            reason_parts.append("Low EF")
+        elif ejection_fraction < 60:
+            reason_parts.append("Reduced EF")
+        if smoke == 1:
+            reason_parts.append("Smoking")
+        if alco == 1:
+            reason_parts.append("Alcohol")
+        if active == 0:
+            reason_parts.append("Inactive")
+        if age_years >= 60:
+            reason_parts.append("Advanced Age")
+        
+        reason_string = ", ".join(reason_parts) if reason_parts else "Low risk profile"
         
         # Display results
         st.markdown("---")
         st.header("🎯 Prediction Results")
+        
+        # Show mapping strategy info
+        st.info(f"📌 **Strategy**: {mapping_strategy} - {mapping_description}")
         
         # Main result with visual indicator
         if prediction == 1:
             st.error(f"⚠️ **HIGH RISK DETECTED** - {risk_percentage:.1f}% probability of heart disease")
         else:
             st.success(f"✅ **LOW RISK** - {risk_percentage:.1f}% probability of heart disease")
+        
+        # Display Reason String
+        st.markdown(f"**🔍 Risk Factors**: {reason_string}")
         
         col_result1, col_result2, col_result3 = st.columns(3)
         
@@ -444,6 +516,49 @@ if predict_button:
                 st.caption(f"{float(ensemble_prob)*100:.2f}% risk")
             
             st.info(f"💡 **Ensemble Method**: Weighted average (50% XGBoost + 50% CatBoost) for more reliable predictions")
+        
+        # SHAP Explanations (Paper Section III.H, IV.D)
+        if SHAP_AVAILABLE:
+            with st.expander("🔍 SHAP Explanation (Model Interpretability)"):
+                try:
+                    st.write("**Feature Importance for This Prediction:**")
+                    # Use CatBoost model for SHAP (as mentioned in paper)
+                    explainer = shap.TreeExplainer(cat_model)
+                    shap_values = explainer.shap_values(X_processed)
+                    
+                    # Get feature names
+                    feature_names = feature_info.get('processed_feature_names', [f'Feature_{i}' for i in range(X_processed.shape[1])])
+                    
+                    # For binary classification, use class 1 (positive class)
+                    if isinstance(shap_values, list):
+                        shap_vals = shap_values[1]  # Positive class
+                    else:
+                        shap_vals = shap_values
+                    
+                    # Get SHAP values for this single prediction
+                    shap_vals_single = shap_vals[0] if len(shap_vals.shape) > 1 else shap_vals
+                    
+                    # Create DataFrame with feature names and SHAP values
+                    shap_df = pd.DataFrame({
+                        'Feature': feature_names[:len(shap_vals_single)],
+                        'SHAP Value': shap_vals_single
+                    })
+                    shap_df['Abs_SHAP'] = np.abs(shap_df['SHAP Value'])
+                    shap_df = shap_df.sort_values('Abs_SHAP', ascending=False).head(10)
+                    
+                    # Display top contributing features
+                    st.write("**Top 10 Contributing Features:**")
+                    for idx, row in shap_df.iterrows():
+                        color = "🔴" if row['SHAP Value'] > 0 else "🔵"
+                        st.write(f"{color} **{row['Feature']}**: {row['SHAP Value']:.4f} "
+                               f"({'increases' if row['SHAP Value'] > 0 else 'decreases'} risk)")
+                    
+                    st.caption("💡 Positive SHAP values increase risk, negative values decrease risk.")
+                except Exception as e:
+                    st.warning(f"Could not generate SHAP explanation: {str(e)}")
+        else:
+            with st.expander("🔍 SHAP Explanation (Model Interpretability)"):
+                st.info("SHAP library not installed. Install with: `pip install shap` to enable feature explanations.")
         
         # Recommendations
         st.markdown("---")

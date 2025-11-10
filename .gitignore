@@ -28,3 +28,13 @@ Thumbs.db
 .streamlit/secrets.toml
 .streamlit/credentials.toml
 
+# Training artifacts (not needed for deployment)
+catboost_info/
+*.tsv
+*.log
+weight_optimization_results.csv
+
+# Docker (optional - can include if needed)
+# docker-compose.train.yml
+# Dockerfile.train
+

@@ -5,6 +5,9 @@ A Streamlit web application for predicting heart attack risk using an ensemble m
 ## Features
 
 - **Ensemble Model**: Combines XGBoost and CatBoost models for accurate predictions
+- **Hybrid Dual-Threshold Risk Mapping**: Three mapping strategies (Standard, Mapping A for high recall, Mapping B for high precision)
+- **SHAP Explanations**: Model interpretability with feature importance for each prediction
+- **Reason String Generation**: Human-readable explanations of risk factors
 - **User-Friendly Interface**: Intuitive form-based input for patient information
 - **Real-time Predictions**: Instant risk assessment with probability scores
 - **Detailed Analysis**: Shows predictions from individual models and ensemble
@@ -18,6 +21,17 @@ A Streamlit web application for predicting heart attack risk using an ensemble m
 - **Recall**: ~84%
 
 ## Installation
+
+### Option 1: Using Docker (Recommended)
+
+1. Make sure Docker Desktop is running
+2. Build and run the container:
+```bash
+docker-compose up --build
+```
+3. The app will be available at `http://localhost:8501`
+
+### Option 2: Local Installation
 
 1. Clone this repository:
 ```bash
@@ -78,9 +92,16 @@ The app will open in your default web browser at `http://localhost:8501`
 
 2. Click "🔮 Predict Heart Attack Risk"
 
-3. View the results:
+3. Select Risk Mapping Strategy (in sidebar):
+   - **Standard**: Balanced precision and recall (threshold 50%)
+   - **Mapping A (High Recall)**: Better for screening, treats moderate risk as at-risk (threshold 30%)
+   - **Mapping B (High Precision)**: Reduces false alarms, treats moderate risk as safe (threshold 70%)
+
+4. View the results:
    - Risk probability percentage
    - Risk level (High/Low)
+   - Reason string with key risk factors
+   - SHAP explanations (feature importance)
    - Detailed model breakdown
    - Recommendations based on risk level
 
@@ -90,7 +111,10 @@ The app will open in your default web browser at `http://localhost:8501`
 streamlit_heart_app/
 ├── app.py                 # Main Streamlit application
 ├── train_model.py         # Model training script
+├── oneLastTime.ipynb      # Complete analysis notebook (EDA, training, evaluation)
 ├── requirements.txt       # Python dependencies
+├── Dockerfile             # Docker configuration
+├── docker-compose.yml     # Docker Compose configuration
 ├── README.md             # This file
 ├── models/               # Generated after training
 │   ├── preprocessor.joblib
@@ -124,6 +148,18 @@ The model uses the following features:
 - **Preprocessing**: StandardScaler for numeric features, OneHotEncoder for categorical
 - **Models**: XGBoost and CatBoost (ensemble with 50-50 weights)
 - **Evaluation**: Stratified train-test split (80-20)
+- **Metrics**: Accuracy, Precision, Recall, F1-score, ROC-AUC, PR-AUC
+- **Interpretability**: SHAP explanations, calibration plots, fairness metrics
+
+## New Features (Paper Implementation)
+
+- **Hybrid Dual-Threshold Mapping**: Implements Mapping A (high recall) and Mapping B (high precision) as described in the paper
+- **SHAP Integration**: Real-time feature importance explanations in the Streamlit app
+- **Reason String**: Human-readable risk factor explanations
+- **PR-AUC Metric**: Precision-Recall AUC added to evaluation metrics
+- **Calibration Analysis**: Brier scores and calibration plots (in notebook)
+- **Fairness Metrics**: Per-group metrics by age, gender, and hypertension status (in notebook)
+- **Updated Formulas**: Lifestyle Score and Risk Age formulas match paper specifications
 
 ## Disclaimer
 

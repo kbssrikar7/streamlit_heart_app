@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  heart-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: heart-attack-predictor
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount project directory for development
+      - .:/app
+      # Mount models directory (if exists)
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
