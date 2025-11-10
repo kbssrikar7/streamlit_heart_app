@@ -35,7 +35,7 @@ docker-compose up --build
 
 1. Clone this repository:
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/kbssrikar7/streamlit_heart_app.git
 cd streamlit_heart_app
 ```
 
