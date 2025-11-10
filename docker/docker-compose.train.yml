@@ -3,18 +3,20 @@ version: '3.8'
 services:
   train:
     build:
-      context: .
-      dockerfile: Dockerfile.train
+      context: ..
+      dockerfile: docker/Dockerfile.train
     container_name: heart-model-trainer
     volumes:
       # Mount project directory for data access
-      - .:/app
+      - ..:/app
       # Mount models directory to persist trained models
-      - ./models:/app/models
+      - ../models:/app/models
+      # Mount scripts directory
+      - ../scripts:/app/scripts
     environment:
       - PYTHONUNBUFFERED=1
     stdin_open: true
     tty: true
-    command: python train_model.py
+    command: python scripts/train_model.py
 
 

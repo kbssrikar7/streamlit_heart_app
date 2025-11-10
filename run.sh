@@ -25,7 +25,7 @@ if [ ! -d "models" ] || [ ! -f "models/xgb_model.joblib" ]; then
     echo "⚠️  Models not found!"
     echo "Please make sure you have:"
     echo "  1. The dataset file: cardio_train_extended.csv"
-    echo "  2. Run: python train_model.py"
+    echo "  2. Run: python scripts/train_model.py"
     echo ""
     read -p "Do you want to train the models now? (y/n) " -n 1 -r
     echo ""
@@ -36,7 +36,7 @@ if [ ! -d "models" ] || [ ! -f "models/xgb_model.joblib" ]; then
             exit 1
         fi
         echo "Training models..."
-        python train_model.py
+        python scripts/train_model.py
     else
         echo "Skipping model training."
     fi
