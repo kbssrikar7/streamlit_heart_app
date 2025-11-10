@@ -11,9 +11,12 @@ import json
 import os
 from pathlib import Path
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for Streamlit
+# Set backend before importing pyplot - critical for Streamlit Cloud
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+# Ensure matplotlib is properly configured for Streamlit
+plt.ioff()  # Turn off interactive mode
 
 # Configure matplotlib fonts for better readability
 plt.rcParams['font.family'] = 'sans-serif'
