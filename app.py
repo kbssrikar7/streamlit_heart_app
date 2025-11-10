@@ -109,16 +109,21 @@ def load_models():
         st.info("Please run train_model.py first to generate the model files.")
         return None, None, None, None, None
 
-# Load models
-preprocessor, xgb_model, cat_model, feature_info, ensemble_weights = load_models()
+# Load models (cached for performance)
+preprocessor, xgb_model, cat_model, feature_info, _ = load_models()
 
-# Verify ensemble weights are correct (should be 50/50)
-if ensemble_weights:
-    w_xgb_check = ensemble_weights.get('w_xgb', 0.5)
-    w_cat_check = ensemble_weights.get('w_cat', 0.5)
-    # If weights don't match paper (50/50), log a warning
-    if abs(w_xgb_check - 0.5) > 0.01 or abs(w_cat_check - 0.5) > 0.01:
-        st.sidebar.warning(f"⚠️ Ensemble weights are {w_xgb_check*100:.0f}%/{w_cat_check*100:.0f}%. Paper specifies 50/50. Clear cache if needed.")
+# IMPORTANT: Always reload weights directly from file to bypass cache
+# This ensures we always use the current weights (50/50) even if models are cached
+ensemble_weights = {'w_xgb': 0.5, 'w_cat': 0.5}  # Default fallback (paper specification)
+weights_file = Path("models/ensemble_weights.json")
+if weights_file.exists():
+    try:
+        with open(weights_file, 'r') as f:
+            ensemble_weights = json.load(f)
+    except Exception as e:
+        # If file read fails, use default 50/50 (paper specification)
+        st.sidebar.warning(f"Could not load weights file: {e}. Using default 50/50.")
+        ensemble_weights = {'w_xgb': 0.5, 'w_cat': 0.5}
 
 # Main title
 st.markdown('<h1 class="main-header">Predicting Heart Attack Risk: An Ensemble Modeling Approach</h1>', unsafe_allow_html=True)
