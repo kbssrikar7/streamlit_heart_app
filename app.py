@@ -10,6 +10,22 @@ import joblib
 import json
 import os
 from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Streamlit
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+
+# Configure matplotlib fonts for better readability
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'Verdana', 'Liberation Sans']
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.titlesize'] = 13
+plt.rcParams['axes.labelsize'] = 11
+plt.rcParams['xtick.labelsize'] = 9
+plt.rcParams['ytick.labelsize'] = 9
+plt.rcParams['legend.fontsize'] = 9
+plt.rcParams['figure.titlesize'] = 14
+
 try:
     import shap
     SHAP_AVAILABLE = True
@@ -19,7 +35,7 @@ except ImportError:
 
 # Page configuration
 st.set_page_config(
-    page_title="Heart Attack Risk Predictor",
+    page_title="Predicting Heart Attack Risk: An Ensemble Modeling Approach",
     page_icon="❤️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -83,7 +99,7 @@ def load_models():
 preprocessor, xgb_model, cat_model, feature_info, ensemble_weights = load_models()
 
 # Main title
-st.markdown('<h1 class="main-header">❤️ Heart Attack Risk Predictor</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">Predicting Heart Attack Risk: An Ensemble Modeling Approach</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
 if preprocessor is None:
@@ -98,24 +114,53 @@ with st.sidebar:
     - CatBoost (50% weight)
     
     **Performance:**
-    - Accuracy: ~85%
+    - Accuracy: ~84%
+    - Recall: ~84%
     - ROC-AUC: ~92%
-    
-    **Note:** This is a prediction tool, not a medical diagnosis.
-    Always consult healthcare professionals for medical advice.
     """)
     
     st.markdown("---")
-    st.header("⚙️ Risk Mapping Strategy")
+    st.header("⚙️ Risk Classification Strategy")
+    
+    st.markdown("""
+    **Choose how to classify patients based on risk probability:**
+    
+    **When to use each strategy:**
+    - **Standard (50%)**: Balanced approach for general use
+    - **Mapping A (30%)**: Use for **screening** - catch more cases early
+    - **Mapping B (70%)**: Use for **conservative** - reduce false alarms
+    """)
+    
     mapping_strategy = st.radio(
-        "Select Risk Classification Strategy:",
+        "Select Strategy:",
         options=["Standard", "Mapping A (High Recall)", "Mapping B (High Precision)"],
         help="""
-        **Standard**: Moderate risk (30-70%) uses threshold 0.5
-        **Mapping A**: Moderate risk treated as 'At-Risk' (higher recall, better for screening)
-        **Mapping B**: Moderate risk treated as 'Safe' (higher precision, reduces false alarms)
+        **Standard (50% threshold)**:
+        - Balanced precision and recall
+        - Best for general clinical use
+        - Risk ≥50% = At-Risk
+        
+        **Mapping A (30% threshold)**:
+        - Higher recall (catches more cases)
+        - Use for: Population screening, early detection
+        - Risk ≥30% = At-Risk
+        - May have more false positives
+        
+        **Mapping B (70% threshold)**:
+        - Higher precision (fewer false alarms)
+        - Use for: Conservative approach, reducing unnecessary tests
+        - Risk ≥70% = At-Risk
+        - May miss some moderate-risk cases
         """
     )
+    
+    # Show explanation based on selection
+    if mapping_strategy == "Standard":
+        st.info("📌 **Standard Mode**: Balanced approach. Risk ≥50% classified as At-Risk.")
+    elif mapping_strategy == "Mapping A (High Recall)":
+        st.warning("📌 **Mapping A (Screening Mode)**: More sensitive. Risk ≥30% classified as At-Risk. Best for catching cases early.")
+    else:
+        st.success("📌 **Mapping B (Conservative Mode)**: More specific. Risk ≥70% classified as At-Risk. Reduces false alarms.")
 
 # Input form with all features
 st.header("📝 Patient Information")
@@ -453,8 +498,13 @@ if predict_button:
         st.markdown("---")
         st.header("🎯 Prediction Results")
         
-        # Show mapping strategy info
-        st.info(f"📌 **Strategy**: {mapping_strategy} - {mapping_description}")
+        # Show mapping strategy info with better explanation
+        if mapping_strategy == "Mapping A (High Recall)":
+            st.info(f"📌 **Strategy**: {mapping_strategy}\n\n{mapping_description}\n\n💡 **Use Case**: Screening mode - catches more cases early. Recommended for population screening.")
+        elif mapping_strategy == "Mapping B (High Precision)":
+            st.success(f"📌 **Strategy**: {mapping_strategy}\n\n{mapping_description}\n\n💡 **Use Case**: Conservative mode - reduces false alarms. Recommended when you want high confidence.")
+        else:
+            st.info(f"📌 **Strategy**: {mapping_strategy}\n\n{mapping_description}\n\n💡 **Use Case**: Balanced approach - good for general clinical use.")
         
         # Main result with visual indicator
         if prediction == 1:
@@ -515,9 +565,12 @@ if predict_button:
                 st.progress(float(ensemble_prob))  # Convert to Python float
                 st.caption(f"{float(ensemble_prob)*100:.2f}% risk")
             
-            st.info(f"💡 **Ensemble Method**: Weighted average (50% XGBoost + 50% CatBoost) for more reliable predictions")
+            # Display actual ensemble weights dynamically
+            w_xgb_pct = int(w_xgb * 100)
+            w_cat_pct = int(w_cat * 100)
+            st.info(f"💡 **Ensemble Method**: Weighted average ({w_xgb_pct}% XGBoost + {w_cat_pct}% CatBoost) for more reliable predictions")
         
-        # SHAP Explanations (Paper Section III.H, IV.D)
+        # SHAP Explanations with Graph Visualization (Paper Section III.H, IV.D)
         if SHAP_AVAILABLE:
             with st.expander("🔍 SHAP Explanation (Model Interpretability)"):
                 try:
@@ -546,16 +599,105 @@ if predict_button:
                     shap_df['Abs_SHAP'] = np.abs(shap_df['SHAP Value'])
                     shap_df = shap_df.sort_values('Abs_SHAP', ascending=False).head(10)
                     
-                    # Display top contributing features
-                    st.write("**Top 10 Contributing Features:**")
-                    for idx, row in shap_df.iterrows():
-                        color = "🔴" if row['SHAP Value'] > 0 else "🔵"
-                        st.write(f"{color} **{row['Feature']}**: {row['SHAP Value']:.4f} "
-                               f"({'increases' if row['SHAP Value'] > 0 else 'decreases'} risk)")
+                    # Create bar chart visualization
+                    fig, ax = plt.subplots(figsize=(10, 6))
                     
-                    st.caption("💡 Positive SHAP values increase risk, negative values decrease risk.")
+                    # Color code: Dark Red for positive (increases risk), Dark Blue for negative (decreases risk)
+                    colors = ['#C62828' if x > 0 else '#1565C0' for x in shap_df['SHAP Value']]
+                    
+                    # Calculate spacing parameters based on SHAP value range
+                    max_abs_value = shap_df['SHAP Value'].abs().max()
+                    min_value = shap_df['SHAP Value'].min()
+                    max_value = shap_df['SHAP Value'].max()
+                    
+                    # Calculate offset for text labels (12% of max absolute value for better spacing)
+                    text_offset = max_abs_value * 0.12
+                    
+                    # Calculate x-axis limits with padding for text labels (25% padding)
+                    xlim_padding = max_abs_value * 0.25
+                    x_min = min_value - xlim_padding
+                    x_max = max_value + xlim_padding
+                    
+                    # Create horizontal bar chart
+                    bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'], 
+                                  color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
+                    
+                    # Set x-axis limits to accommodate text labels
+                    ax.set_xlim(x_min, x_max)
+                    
+                    # Add vertical line at zero
+                    ax.axvline(x=0, color='black', linestyle='-', linewidth=1)
+                    
+                    # Customize axes
+                    ax.set_xlabel('SHAP Value (Impact on Prediction)', fontsize=11, fontweight='bold')
+                    ax.set_title('Top 10 Feature Contributions to Heart Disease Risk', 
+                               fontsize=13, fontweight='bold', pad=15)
+                    ax.grid(axis='x', alpha=0.3, linestyle='--')
+                    ax.set_facecolor('#f8f9fa')
+                    
+                    # Add legend
+                    legend_elements = [
+                        Patch(facecolor='#C62828', alpha=0.7, label='Increases Risk'),
+                        Patch(facecolor='#1565C0', alpha=0.7, label='Decreases Risk')
+                    ]
+                    ax.legend(handles=legend_elements, loc='lower right', fontsize=9)
+                    
+                    # Add value labels on bars with proper spacing to avoid overlap
+                    for i, (idx, row) in enumerate(shap_df.iterrows()):
+                        value = row['SHAP Value']
+                        if value > 0:
+                            # For positive values: place text to the right of the bar with offset
+                            ax.text(value + text_offset, i, 
+                                   f'{value:.3f}', 
+                                   va='center', ha='left',
+                                   fontsize=9, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                                            alpha=0.8, edgecolor='gray', linewidth=0.5))
+                        else:
+                            # For negative values: place text to the left of the bar with offset
+                            ax.text(value - text_offset, i, 
+                                   f'{value:.3f}', 
+                                   va='center', ha='right',
+                                   fontsize=9, fontweight='bold',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                                            alpha=0.8, edgecolor='gray', linewidth=0.5))
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close()
+                    
+                    # Text summary below graph
+                    st.markdown("---")
+                    st.markdown("### 📊 Detailed Feature Contributions:")
+                    
+                    col_shap1, col_shap2 = st.columns(2)
+                    
+                    with col_shap1:
+                        increases_risk = shap_df[shap_df['SHAP Value'] > 0]
+                        if len(increases_risk) > 0:
+                            st.markdown("**🔴 Features that Increase Risk:**")
+                            for idx, row in increases_risk.iterrows():
+                                st.write(f"• **{row['Feature']}**: +{row['SHAP Value']:.4f}")
+                        else:
+                            st.info("No features increase risk for this prediction.")
+                    
+                    with col_shap2:
+                        decreases_risk = shap_df[shap_df['SHAP Value'] < 0]
+                        if len(decreases_risk) > 0:
+                            st.markdown("**🔵 Features that Decrease Risk:**")
+                            for idx, row in decreases_risk.iterrows():
+                                st.write(f"• **{row['Feature']}**: {row['SHAP Value']:.4f}")
+                        else:
+                            st.info("No features decrease risk for this prediction.")
+                    
+                    st.caption("💡 **Positive SHAP values** (red bars) increase the predicted risk of heart disease.")
+                    st.caption("💡 **Negative SHAP values** (blue bars) decrease the predicted risk of heart disease.")
+                    st.caption("📈 The bar chart shows how each feature contributes to the final prediction. Longer bars indicate greater impact.")
+                    
                 except Exception as e:
                     st.warning(f"Could not generate SHAP explanation: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
         else:
             with st.expander("🔍 SHAP Explanation (Model Interpretability)"):
                 st.info("SHAP library not installed. Install with: `pip install shap` to enable feature explanations.")
