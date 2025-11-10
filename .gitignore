@@ -33,6 +33,8 @@ catboost_info/
 *.tsv
 *.log
 weight_optimization_results.csv
+feedback.txt
+app.log
 
 # Docker (optional - can include if needed)
 # docker-compose.train.yml

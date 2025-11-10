@@ -141,7 +141,7 @@ The model uses the following features:
 - Age Group (Young/Middle/Senior)
 - BMI Category (Underweight/Normal/Overweight/Obese)
 - BP Category (Normal/Elevated/High Stage 1/High Stage 2)
-- Risk Level (Low/Medium/High)
+- Risk Level (Low/Moderate/High)
 
 ## Model Architecture
 
