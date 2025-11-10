@@ -40,6 +40,10 @@ app.log
 docs/_build/
 docs/.doctrees/
 
+# Scripts (keep them in repo, but ignore compiled files)
+scripts/__pycache__/
+scripts/*.pyc
+
 # Docker (optional - can include if needed)
 # docker-compose.train.yml
 # Dockerfile.train

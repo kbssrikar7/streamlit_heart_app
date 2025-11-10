@@ -27,7 +27,12 @@ A Streamlit web application for predicting heart attack risk using an ensemble m
 1. Make sure Docker Desktop is running
 2. Build and run the container:
 ```bash
+cd docker
 docker-compose up --build
+```
+Or from the root directory:
+```bash
+docker-compose -f docker/docker-compose.yml up --build
 ```
 3. The app will be available at `http://localhost:8501`
 
@@ -51,7 +56,7 @@ Before running the Streamlit app, you need to train the models:
 1. Place your dataset `cardio_train_extended.csv` in the project root directory
 2. Run the training script:
 ```bash
-python train_model.py
+python scripts/train_model.py
 ```
 
 This will:
@@ -109,15 +114,23 @@ The app will open in your default web browser at `http://localhost:8501`
 
 ```
 streamlit_heart_app/
-├── app.py                      # Main Streamlit application
-├── train_model.py              # Model training script
-├── config.py                   # Configuration parameters
+├── app.py                      # Main Streamlit application (required in root for Streamlit Cloud)
 ├── oneLastTime.ipynb           # Complete analysis notebook (EDA, training, evaluation)
 ├── requirements.txt            # Python dependencies
-├── Dockerfile                  # Docker configuration
-├── docker-compose.yml          # Docker Compose configuration
-├── run.sh                      # Quick start script
 ├── README.md                   # This file
+├── run.sh                      # Quick start script
+├── docker/                     # Docker configuration files
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── docker-compose.train.yml
+│   └── Dockerfile.train
+├── scripts/                    # Python scripts
+│   ├── train_model.py          # Model training script
+│   ├── config.py               # Configuration parameters
+│   ├── test_formulas.py        # Formula verification tests
+│   ├── test_website.py         # Website functionality tests
+│   ├── test_in_docker.py       # Docker container tests
+│   └── test_app.py             # Application tests
 ├── models/                     # Generated after training
 │   ├── preprocessor.joblib
 │   ├── xgb_model.joblib
@@ -125,6 +138,7 @@ streamlit_heart_app/
 │   ├── feature_info.json
 │   └── ensemble_weights.json
 ├── docs/                       # Documentation files
+│   ├── README.md
 │   ├── ACTION_ITEMS.md
 │   ├── CLEAR_CACHE_INSTRUCTIONS.md
 │   ├── DEPLOYMENT.md
@@ -145,9 +159,6 @@ streamlit_heart_app/
 │   ├── TIME_ESTIMATE.md
 │   ├── WEIGHT_OPTIMIZATION_NOTE.md
 │   └── WHAT_REMAINS.md
-├── test_formulas.py            # Formula verification tests
-├── test_website.py             # Website functionality tests
-├── test_in_docker.py           # Docker container tests
 └── cardio_train_extended.csv   # Dataset (not included in repo)
 ```
 
@@ -201,20 +212,20 @@ Additional documentation is available in the [`docs/`](docs/) folder:
 
 The project includes comprehensive test suites:
 
-- **Formula Tests** (`test_formulas.py`): Verifies all formulas match paper specifications (52 tests)
-- **Website Tests** (`test_website.py`): Tests website functionality and structure (57 tests)
-- **Docker Tests** (`test_in_docker.py`): Tests application in Docker container (62 tests)
+- **Formula Tests** (`scripts/test_formulas.py`): Verifies all formulas match paper specifications (52 tests)
+- **Website Tests** (`scripts/test_website.py`): Tests website functionality and structure (57 tests)
+- **Docker Tests** (`scripts/test_in_docker.py`): Tests application in Docker container (62 tests)
 
 Run tests:
 ```bash
 # Formula tests
-python3 test_formulas.py
+python3 scripts/test_formulas.py
 
 # Website tests
-python3 test_website.py
+python3 scripts/test_website.py
 
 # Docker tests
-docker exec heart-attack-predictor python3 test_in_docker.py
+docker exec heart-attack-predictor python3 scripts/test_in_docker.py
 ```
 
 ## Disclaimer
