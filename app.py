@@ -663,8 +663,20 @@ if predict_button:
                                             alpha=0.8, edgecolor='gray', linewidth=0.5))
                     
                     plt.tight_layout()
-                    st.pyplot(fig)
-                    plt.close()
+                    
+                    # Display the graph - use clear_figure=False to ensure it displays
+                    try:
+                        st.pyplot(fig, clear_figure=False)
+                    except Exception as plot_error:
+                        # Fallback: save to buffer and display
+                        import io
+                        buf = io.BytesIO()
+                        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+                        buf.seek(0)
+                        st.image(buf, use_container_width=True)
+                        st.warning(f"Graph displayed using fallback method. Original error: {str(plot_error)}")
+                    
+                    plt.close(fig)
                     
                     # Text summary below graph
                     st.markdown("---")
@@ -695,9 +707,38 @@ if predict_button:
                     st.caption("📈 The bar chart shows how each feature contributes to the final prediction. Longer bars indicate greater impact.")
                     
                 except Exception as e:
-                    st.warning(f"Could not generate SHAP explanation: {str(e)}")
+                    st.error(f"⚠️ Error generating SHAP graph: {str(e)}")
                     import traceback
-                    st.code(traceback.format_exc())
+                    with st.expander("🔍 Error Details (for debugging)"):
+                        st.code(traceback.format_exc())
+                    
+                    # Fallback: Show text-only SHAP values if graph fails
+                    st.info("📊 **Fallback: Feature Contributions (Text Only)**")
+                    try:
+                        # Try to get SHAP values even if graph failed
+                        explainer = shap.TreeExplainer(cat_model)
+                        shap_values = explainer.shap_values(X_processed)
+                        
+                        if isinstance(shap_values, list):
+                            shap_vals = shap_values[1]
+                        else:
+                            shap_vals = shap_values
+                        
+                        shap_vals_single = shap_vals[0] if len(shap_vals.shape) > 1 else shap_vals
+                        feature_names = feature_info.get('processed_feature_names', [f'Feature_{i}' for i in range(X_processed.shape[1])])
+                        
+                        shap_df_fallback = pd.DataFrame({
+                            'Feature': feature_names[:len(shap_vals_single)],
+                            'SHAP Value': shap_vals_single
+                        })
+                        shap_df_fallback['Abs_SHAP'] = np.abs(shap_df_fallback['SHAP Value'])
+                        shap_df_fallback = shap_df_fallback.sort_values('Abs_SHAP', ascending=False).head(10)
+                        
+                        for idx, row in shap_df_fallback.iterrows():
+                            icon = "🔴" if row['SHAP Value'] > 0 else "🔵"
+                            st.write(f"{icon} **{row['Feature']}**: {row['SHAP Value']:.4f}")
+                    except:
+                        st.warning("Could not generate SHAP values. Please check that SHAP library is properly installed.")
         else:
             with st.expander("🔍 SHAP Explanation (Model Interpretability)"):
                 st.info("SHAP library not installed. Install with: `pip install shap` to enable feature explanations.")
