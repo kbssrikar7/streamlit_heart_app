@@ -76,7 +76,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Load models and preprocessor
-@st.cache_resource
+# Note: Using cache_ttl to ensure weights file updates are picked up
+@st.cache_resource(ttl=3600)  # Cache for 1 hour, but can be cleared
 def load_models():
     """Load models and preprocessor (cached for performance)"""
     models_dir = Path("models")
@@ -100,6 +101,14 @@ def load_models():
 
 # Load models
 preprocessor, xgb_model, cat_model, feature_info, ensemble_weights = load_models()
+
+# Verify ensemble weights are correct (should be 50/50)
+if ensemble_weights:
+    w_xgb_check = ensemble_weights.get('w_xgb', 0.5)
+    w_cat_check = ensemble_weights.get('w_cat', 0.5)
+    # If weights don't match paper (50/50), log a warning
+    if abs(w_xgb_check - 0.5) > 0.01 or abs(w_cat_check - 0.5) > 0.01:
+        st.sidebar.warning(f"⚠️ Ensemble weights are {w_xgb_check*100:.0f}%/{w_cat_check*100:.0f}%. Paper specifies 50/50. Clear cache if needed.")
 
 # Main title
 st.markdown('<h1 class="main-header">Predicting Heart Attack Risk: An Ensemble Modeling Approach</h1>', unsafe_allow_html=True)
