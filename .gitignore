@@ -36,6 +36,10 @@ weight_optimization_results.csv
 feedback.txt
 app.log
 
+# Documentation build (if any)
+docs/_build/
+docs/.doctrees/
+
 # Docker (optional - can include if needed)
 # docker-compose.train.yml
 # Dockerfile.train

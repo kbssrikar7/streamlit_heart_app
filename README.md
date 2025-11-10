@@ -109,20 +109,46 @@ The app will open in your default web browser at `http://localhost:8501`
 
 ```
 streamlit_heart_app/
-├── app.py                 # Main Streamlit application
-├── train_model.py         # Model training script
-├── oneLastTime.ipynb      # Complete analysis notebook (EDA, training, evaluation)
-├── requirements.txt       # Python dependencies
-├── Dockerfile             # Docker configuration
-├── docker-compose.yml     # Docker Compose configuration
-├── README.md             # This file
-├── models/               # Generated after training
+├── app.py                      # Main Streamlit application
+├── train_model.py              # Model training script
+├── config.py                   # Configuration parameters
+├── oneLastTime.ipynb           # Complete analysis notebook (EDA, training, evaluation)
+├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Docker configuration
+├── docker-compose.yml          # Docker Compose configuration
+├── run.sh                      # Quick start script
+├── README.md                   # This file
+├── models/                     # Generated after training
 │   ├── preprocessor.joblib
 │   ├── xgb_model.joblib
 │   ├── cat_model.joblib
 │   ├── feature_info.json
 │   └── ensemble_weights.json
-└── cardio_train_extended.csv  # Dataset (not included in repo)
+├── docs/                       # Documentation files
+│   ├── ACTION_ITEMS.md
+│   ├── CLEAR_CACHE_INSTRUCTIONS.md
+│   ├── DEPLOYMENT.md
+│   ├── DEPLOYMENT_STATUS.md
+│   ├── ENSEMBLE_WEIGHTS_EXPLANATION.md
+│   ├── EXECUTION_COMPLETE.md
+│   ├── FINAL_CHECKLIST.md
+│   ├── FIXES_APPLIED.md
+│   ├── GITHUB_DESKTOP_GUIDE.md
+│   ├── IMPLEMENTATION_SUMMARY.md
+│   ├── IMPROVEMENTS_APPLIED.md
+│   ├── IMPROVEMENTS_COMPLETED.md
+│   ├── IMPROVEMENTS_FINAL.md
+│   ├── PAPER_IMPLEMENTATION_COMPARISON.md
+│   ├── QUICK_COMPARISON_TABLE.md
+│   ├── REMAINING_TASKS.md
+│   ├── TEST_REPORT.md
+│   ├── TIME_ESTIMATE.md
+│   ├── WEIGHT_OPTIMIZATION_NOTE.md
+│   └── WHAT_REMAINS.md
+├── test_formulas.py            # Formula verification tests
+├── test_website.py             # Website functionality tests
+├── test_in_docker.py           # Docker container tests
+└── cardio_train_extended.csv   # Dataset (not included in repo)
 ```
 
 ## Features Used by the Model
@@ -161,6 +187,36 @@ The model uses the following features:
 - **Fairness Metrics**: Per-group metrics by age, gender, and hypertension status (in notebook)
 - **Updated Formulas**: Lifestyle Score and Risk Age formulas match paper specifications
 
+## Documentation
+
+Additional documentation is available in the [`docs/`](docs/) folder:
+
+- **Implementation Details**: See `docs/IMPLEMENTATION_SUMMARY.md` and `docs/FIXES_APPLIED.md`
+- **Paper Comparison**: See `docs/PAPER_IMPLEMENTATION_COMPARISON.md` for paper vs implementation comparison
+- **Testing**: See `docs/TEST_REPORT.md` for test results
+- **Deployment**: See `docs/DEPLOYMENT.md` for deployment instructions
+- **Troubleshooting**: See `docs/CLEAR_CACHE_INSTRUCTIONS.md` for cache issues
+
+## Testing
+
+The project includes comprehensive test suites:
+
+- **Formula Tests** (`test_formulas.py`): Verifies all formulas match paper specifications (52 tests)
+- **Website Tests** (`test_website.py`): Tests website functionality and structure (57 tests)
+- **Docker Tests** (`test_in_docker.py`): Tests application in Docker container (62 tests)
+
+Run tests:
+```bash
+# Formula tests
+python3 test_formulas.py
+
+# Website tests
+python3 test_website.py
+
+# Docker tests
+docker exec heart-attack-predictor python3 test_in_docker.py
+```
+
 ## Disclaimer
 
 ⚠️ **Important**: This tool is for educational and demonstration purposes only. It should NOT be used as a substitute for professional medical advice, diagnosis, or treatment. Always consult qualified healthcare providers for medical decisions.
@@ -168,3 +224,7 @@ The model uses the following features:
 ## License
 
 This project is provided as-is for educational purposes.
+
+## Repository
+
+**GitHub Repository**: https://github.com/kbssrikar7/streamlit_heart_app
